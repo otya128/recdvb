@@ -82,6 +82,7 @@ search_channelS(char *channel)
     unsigned int tsid = 0;
     unsigned int node = 0;
     unsigned int slot = 0;
+    unsigned int network_id = 0;
     char *bs_ch = channel;
     int lp;
 
@@ -121,10 +122,11 @@ search_channelS(char *channel)
 	        return FALSE;
 		}
 	}
-    if( 0x4010U<=tsid && tsid<=0x7fffU && *bs_ch=='\0' ){
+    if( 0x4010U<=tsid && tsid<=0xcfffU && *bs_ch=='\0' ){
 		node = ( tsid & 0x01f0U ) >> 4;
         slot = tsid & 0x0007U;
-        if((tsid & 0xf000U) == 0x4000U ){
+        network_id = (tsid & 0xf000U) >> 12;
+        if(network_id == 0x4 || network_id == 0xb){
 			if( node & 0x0001 ){
 	            isdb_t_conv_set.set_freq = node / 2;
                 if( node == 15 )
