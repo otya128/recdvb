@@ -54,6 +54,10 @@ static unsigned int GetFrequency_S(int ch)
 		freq = 1613000 + 40000 * (ch - 12);
 	else if (ch < 36)
 		freq = 1593000 + 40000 * (ch - 24);
+	else if (ch < 48)
+		freq = 2241660 + 38360 * (ch - 36);
+	else if (ch < 61)
+		freq = 2726000 + 40000 * (ch - 48);
 	else
 		freq = 1049480;	// 変な値なので0chに
 	return freq;
@@ -132,14 +136,22 @@ search_channelS(char *channel)
                 if( node == 15 )
                     slot--;
                 isdb_t_conv_set.add_freq = slot;
-	        }else
-                return FALSE;
+	        } else {
+	            isdb_t_conv_set.set_freq = node / 2 + 35;
+            }
         }else{
-			if( (node & 0x0001) == 0 && slot == 0 ){
+			if( (node & 0x0001) == 0 ){
          	    isdb_t_conv_set.set_freq = node / 2 + 11;
                 isdb_t_conv_set.add_freq = 0;
-	        }else
-                return FALSE;
+	        }else {
+                if (node == 25) {
+                    node = 0;
+                } else {
+                    node += 2;
+                }
+         	    isdb_t_conv_set.set_freq = node / 2 + 48;
+                isdb_t_conv_set.add_freq = 0;
+            }
         }
 		isdb_t_conv_set.type = CHTYPE_SATELLITE;
         isdb_t_conv_set.tsid = tsid;
