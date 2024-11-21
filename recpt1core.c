@@ -183,7 +183,7 @@ searchrecoff(char *channel)
 int
 set_frequency(thread_data *tdata, boolean msg_view)
 {
-    struct dtv_property prop[3];
+    struct dtv_property prop[4];
     struct dtv_properties props;
     struct dvb_frontend_info fe_info;
     int i;
@@ -206,8 +206,10 @@ set_frequency(thread_data *tdata, boolean msg_view)
         }
         fprintf(stderr,"\nUsing DVB device \"%s\"\n",fe_info.name);
 
-        prop[0].cmd = DTV_FREQUENCY;
-        prop[0].u.data = GetFrequency_T(tdata->table->set_freq);
+        prop[0].cmd = DTV_DELIVERY_SYSTEM;
+        prop[0].u.data = SYS_ISDBT;
+        prop[1].cmd = DTV_FREQUENCY;
+        prop[1].u.data = GetFrequency_T(tdata->table->set_freq);
 #if 0
 	    prop[1].cmd = DTV_STREAM_ID;
         if(tuner_type != FRIIO_WT)
@@ -216,11 +218,11 @@ set_frequency(thread_data *tdata, boolean msg_view)
         props.props = prop;
         props.num = 3;
 #else
-        prop[1].cmd = DTV_TUNE;
+        prop[2].cmd = DTV_TUNE;
         props.props = prop;
-        props.num = 2;
+        props.num = 3;
 #endif
-        fprintf(stderr,"tuning to %.3f MHz\n",(double)prop[0].u.data / 1000000);
+        fprintf(stderr,"tuning to %.3f MHz\n",(double)prop[1].u.data / 1000000);
     }else
     if(tdata->table->type == CHTYPE_SATELLITE){
         if(fe_info.type != FE_QPSK){
@@ -240,17 +242,19 @@ set_frequency(thread_data *tdata, boolean msg_view)
 				fprintf(stderr, "LNB control failed");
 		}
 
-        prop[0].cmd = DTV_FREQUENCY;
-        prop[0].u.data = GetFrequency_S(tdata->table->set_freq);
-        prop[1].cmd = DTV_STREAM_ID;
-        prop[1].u.data = tdata->table->tsid;
-        prop[2].cmd = DTV_TUNE;
+        prop[0].cmd = DTV_DELIVERY_SYSTEM;
+        prop[0].u.data = SYS_ISDBS;
+        prop[1].cmd = DTV_FREQUENCY;
+        prop[1].u.data = GetFrequency_S(tdata->table->set_freq);
+        prop[2].cmd = DTV_STREAM_ID;
+        prop[2].u.data = tdata->table->tsid;
+        prop[3].cmd = DTV_TUNE;
         props.props = prop;
-        props.num = 3;
-        fprintf(stderr,"tuning to %d MHz\n",prop[0].u.data / 1000);
+        props.num = 4;
+        fprintf(stderr,"tuning to %d MHz\n",prop[1].u.data / 1000);
 	}
     if(ioctl(tdata->fefd, FE_SET_PROPERTY, &props) == -1) {
-        perror("ioctl FE_SET_PROPERTY\n");
+        perror("ioctl FE_SET_PROPERTY");
         return 1;
     }
     return 0;
