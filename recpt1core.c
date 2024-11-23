@@ -187,21 +187,42 @@ set_frequency(thread_data *tdata, boolean msg_view)
     struct dtv_properties props;
     struct dvb_frontend_info fe_info;
     int i;
+    boolean isdb_t = false;
+    boolean isdb_s = false;
 
     if( (ioctl(tdata->fefd,FE_GET_INFO, &fe_info) < 0)){
         fprintf(stderr, "FE_GET_INFO failed\n");
         return 1;
     }
+    isdb_t = fe_info.type == FE_OFDM;
+    isdb_s = fe_info.type == FE_QPSK;
+
     // 機種判別
     for(i = 0; tuners_prop[i].name!=NULL; i++){
 	    if(strncmp(fe_info.name, tuners_prop[i].name, strlen(tuners_prop[i].name)) == 0)
 	    	tuner_type = tuners_prop[i].type;
 	}
 
+    if (tuner_type == OTHER_TUNER) {
+        prop[0].cmd = DTV_ENUM_DELSYS;
+        props.num = 1;
+        props.props = prop;
+        if(ioctl(tdata->fefd, FE_GET_PROPERTY, &props) >= 0){
+            for (i = 0; i < prop[0].u.buffer.len; i++) {
+                if (prop[0].u.buffer.data[i] == SYS_ISDBT) {
+                    isdb_t = TRUE;
+                }
+                if (prop[0].u.buffer.data[i] == SYS_ISDBS) {
+                    isdb_s = TRUE;
+                }
+            }
+        }
+    }
+
     if(tdata->table->type == CHTYPE_GROUND){
-        if(fe_info.type != FE_OFDM){
+        if(!isdb_t){
             if(msg_view)
-                fprintf(stderr, "tuner is not UHF(FE_OFDM)\n");
+                fprintf(stderr, "tuner does not support ISDB-T\n");
             return 1;
         }
         fprintf(stderr,"\nUsing DVB device \"%s\"\n",fe_info.name);
@@ -225,9 +246,9 @@ set_frequency(thread_data *tdata, boolean msg_view)
         fprintf(stderr,"tuning to %.3f MHz\n",(double)prop[1].u.data / 1000000);
     }else
     if(tdata->table->type == CHTYPE_SATELLITE){
-        if(fe_info.type != FE_QPSK){
+        if(!isdb_s){
             if(msg_view)
-                fprintf(stderr, "tuner is not BS/CS110(FE_QPSK)\n");
+                fprintf(stderr, "tuner does not support ISDB-S\n");
             return 1;
         }
         fprintf(stderr,"\nUsing DVB device \"%s\"\n",fe_info.name);
