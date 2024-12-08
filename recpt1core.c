@@ -514,122 +514,45 @@ lnb_control(int dev_num, int lnb_vol)
     return 0;
 }
 
-float
-getsignal_isdb_s(int signal)
-{
-    /* apply linear interpolation */
-    static const float afLevelTable[] = {
-        24.07f,    // 00    00    0        24.07dB
-        24.07f,    // 10    00    4096     24.07dB
-        18.61f,    // 20    00    8192     18.61dB
-        15.21f,    // 30    00    12288    15.21dB
-        12.50f,    // 40    00    16384    12.50dB
-        10.19f,    // 50    00    20480    10.19dB
-        8.140f,    // 60    00    24576    8.140dB
-        6.270f,    // 70    00    28672    6.270dB
-        4.550f,    // 80    00    32768    4.550dB
-        3.730f,    // 88    00    34816    3.730dB
-        3.630f,    // 88    FF    35071    3.630dB
-        2.940f,    // 90    00    36864    2.940dB
-        1.420f,    // A0    00    40960    1.420dB
-        0.000f     // B0    00    45056    -0.01dB
-    };
-
-    unsigned char sigbuf[4];
-    memset(sigbuf, '\0', sizeof(sigbuf));
-    sigbuf[0] =  (((signal & 0xFF00) >> 8) & 0XFF);
-    sigbuf[1] =  (signal & 0xFF);
-
-    /* calculate signal level */
-    if(sigbuf[0] <= 0x10U) {
-        /* clipped maximum */
-        return 24.07f;
-    }
-    else if (sigbuf[0] >= 0xB0U) {
-        /* clipped minimum */
-        return 0.0f;
-    }
-    else {
-        /* linear interpolation */
-        const float fMixRate =
-            (float)(((unsigned short)(sigbuf[0] & 0x0FU) << 8) |
-                    (unsigned short)sigbuf[0]) / 4096.0f;
-        return afLevelTable[sigbuf[0] >> 4] * (1.0f - fMixRate) +
-            afLevelTable[(sigbuf[0] >> 4) + 0x01U] * fMixRate;
-    }
-}
-
 void
 calc_cn(int fd, int type, boolean use_bell)
 {
-    int16_t rc;
-    int     ss_errno,rs_errno;
-    double  P;
-    double  CNR;
-    int bell = 0;
+	double  CNR;
+	int bell = 0;
 
-    if(ioctl(fd, FE_READ_SIGNAL_STRENGTH, &rc) < 0) {
-		if( errno != 25 ) {
-			ss_errno = errno;
-		    if(ioctl(fd, FE_READ_SNR, &rc)<0){
-				rs_errno = errno;
-#ifdef DTV_STAT_SIGNAL_STRENGTH
-				struct dtv_property prop[1];
-				struct dtv_properties props;
+	struct dtv_property prop[2];
+	struct dtv_properties props;
 
-				prop[0].cmd = DTV_STAT_SIGNAL_STRENGTH;
-	//			prop[0].u.data = SEC_VOLTAGE_OFF;
-				props.props = prop;
-				props.num = 1;
-
-				if (ioctl(fd, FE_GET_PROPERTY, &props) < 0){
-					fprintf(stderr, "ERROR: calc_cn() ioctl(FE_GET_PROPERTY) errno=%d(%s)\n", errno, strerror(errno));
-#endif
-					fprintf(stderr, "ERROR: calc_cn() ioctl(FE_READ_SIGNAL_STRENGTH) errno=%d(%s)\n", ss_errno, strerror(ss_errno));
-					fprintf(stderr, "ERROR: calc_cn() ioctl(FE_READ_SNR) errno=%d(%s)\n", rs_errno, strerror(rs_errno));
-					return;
-#ifdef DTV_STAT_SIGNAL_STRENGTH
-				}else{
-				    fprintf(stderr,"\rSNR0: %d", prop[0].u.st.stat[0].uvalue);
-					return;
-				}
-#endif
-			}else
-				if(tuner_type & EARTH_PT1)
-				    CNR = (double)rc / 256;		// 目算なので適当 "* 4 / 1000"かも
-				else{
-				    fprintf(stderr,"\rSNR: %d", rc);
-					return;
-				}
-		}else{
-			fprintf(stderr, "ERROR: calc_cn() ioctl(FE_READ_SIGNAL_STRENGTH) errno=%d(%s)\n", errno, strerror(errno));	// 	Inappropriate ioctl for device
-			return;
-		}
-    }else{
-	    if(type == CHTYPE_GROUND) {
-	        P = log10(5505024/(double)rc) * 10;
-	        CNR = (0.000024 * P * P * P * P) - (0.0016 * P * P * P) +
-	                    (0.0398 * P * P) + (0.5491 * P)+3.0965;
-	    }
-	    else {
-	        CNR = getsignal_isdb_s(rc);
-	    }
+	prop[0].cmd = DTV_STAT_CNR;
+	prop[1].cmd = DTV_STAT_SIGNAL_STRENGTH;
+	props.props = prop;
+	props.num = 2;
+	if (ioctl(fd, FE_GET_PROPERTY, &props) < 0){
+		fprintf(stderr, "ERROR: calc_cn() ioctl(FE_GET_PROPERTY) errno=%d(%s)\n", errno, strerror(errno));
+		return;
 	}
 
-    if(use_bell) {
-        if(CNR >= 30.0)
-            bell = 3;
-        else if(CNR >= 15.0 && CNR < 30.0)
-            bell = 2;
-        else if(CNR < 15.0)
-            bell = 1;
-        fprintf(stderr, "\rC/N = %fdB (SNR:%d)", CNR, rc);
-        do_bell(bell);
-    }
-    else {
-        fprintf(stderr, "\rC/N = %fdB (SNR:%d)", CNR, rc);
-    }
-    return;
+	if (prop[0].u.st.stat[0].scale == FE_SCALE_DECIBEL){
+		CNR = prop[0].u.st.stat[0].svalue / 1000.0;
+		if(CNR >= 30.0)
+			bell = 3;
+		else if(CNR >= 15.0 && CNR < 30.0)
+			bell = 2;
+		else if(CNR < 15.0)
+			bell = 1;
+		fprintf(stderr, "C/N = %.4fdB\n", CNR);
+		if(use_bell) {
+			do_bell(bell);
+		}
+	} else if (prop[1].u.st.stat[0].scale == FE_SCALE_RELATIVE){
+		fprintf(stderr, "C/N = %.4f%%\n", prop[0].u.st.stat[0].uvalue / 65535.0 * 100);
+	}
+	if (prop[1].u.st.stat[0].scale == FE_SCALE_DECIBEL){
+		fprintf(stderr, "RF level = %.4fdBm\n", prop[1].u.st.stat[0].svalue / 1000.0);
+	} else if (prop[1].u.st.stat[1].scale == FE_SCALE_RELATIVE){
+		fprintf(stderr, "RF level = %.4f%%\n", prop[1].u.st.stat[0].uvalue / 65535.0 * 100);
+	}
+	return;
 }
 
 void
