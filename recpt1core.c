@@ -229,8 +229,10 @@ set_frequency(thread_data *tdata, boolean msg_view)
 
         prop[0].cmd = DTV_DELIVERY_SYSTEM;
         prop[0].u.data = SYS_ISDBT;
-        prop[1].cmd = DTV_FREQUENCY;
-        prop[1].u.data = GetFrequency_T(tdata->table->set_freq);
+        prop[1].cmd = DTV_BANDWIDTH_HZ;
+        prop[1].u.data = 6000000;
+        prop[2].cmd = DTV_FREQUENCY;
+        prop[2].u.data = GetFrequency_T(tdata->table->set_freq);
 #if 0
 	    prop[1].cmd = DTV_STREAM_ID;
         if(tuner_type != FRIIO_WT)
@@ -239,11 +241,11 @@ set_frequency(thread_data *tdata, boolean msg_view)
         props.props = prop;
         props.num = 3;
 #else
-        prop[2].cmd = DTV_TUNE;
+        prop[3].cmd = DTV_TUNE;
         props.props = prop;
-        props.num = 3;
+        props.num = 4;
 #endif
-        fprintf(stderr,"tuning to %.3f MHz\n",(double)prop[1].u.data / 1000000);
+        fprintf(stderr,"tuning to %.3f MHz\n",(double)prop[2].u.data / 1000000);
     }else
     if(tdata->table->type == CHTYPE_SATELLITE){
         if(!isdb_s){
